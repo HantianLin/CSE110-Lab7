@@ -112,4 +112,16 @@ public class NoteAPI {
         // We can use future.get(1, SECONDS) to wait for the result.
         return future;
     }
+
+    public Future<String> getAsync(String title) {
+        var executor = Executors.newSingleThreadExecutor();
+        var future = executor.submit(() -> getNote(title));
+        return future;
+    }
+
+    public Future<?> putAsync(String title, String content) {
+        var executor = Executors.newSingleThreadExecutor();
+        var future = executor.submit(() -> putNote(title, content));
+        return future;
+    }
 }
