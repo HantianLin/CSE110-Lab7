@@ -11,8 +11,10 @@ import com.google.gson.Gson;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 
 public class NoteAPI {
     // TODO: Implement the API using OkHttp!
@@ -62,6 +64,43 @@ public class NoteAPI {
         } catch (Exception e) {
             e.printStackTrace();
             return null;
+        }
+    }
+
+    @WorkerThread
+    public String getNote(String title) {
+        String encodedTitle = title.replace(" ", "%20");
+
+        var request = new Request.Builder()
+                .url("https://sharednotes.goto.ucsd.edu/notes/" + encodedTitle)
+                .method("GET", null)
+                .build();
+
+        try (var response = client.newCall(request).execute()) {
+            assert response.body() != null;
+            var content = response.body().string();
+            Log.i("GET NOTE", content);
+            return content;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    @WorkerThread
+    public void putNote(String title, String content) {
+        // URLs cannot contain spaces, so we replace them with %20.
+        String encodedTitle = title.replace(" ", "%20");
+
+        var request = new Request.Builder()
+                .url("https://sharednotes.goto.ucsd.edu/notes/" + encodedTitle)
+                .method("PUT", RequestBody.create(content, MediaType.parse("text/plain")))
+                .build();
+
+        try (var response = client.newCall(request).execute()) {
+            Log.i("PUT NOTE", "Success");
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 

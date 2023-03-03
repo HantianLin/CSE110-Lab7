@@ -1,18 +1,25 @@
 package edu.ucsd.cse110.sharednotes.model;
 
+import android.util.Log;
+
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MediatorLiveData;
+import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class NoteRepository {
     private final NoteDao dao;
+    private MutableLiveData<Note> remoteNote;
 
     public NoteRepository(NoteDao dao) {
         this.dao = dao;
+        remoteNote = new MutableLiveData<>();
     }
 
     // Synced Methods
@@ -91,12 +98,33 @@ public class NoteRepository {
         // You may (but don't have to) want to cache the LiveData's for each title, so that
         // you don't create a new polling thread every time you call getRemote with the same title.
         // You don't need to worry about killing background threads.
+        NoteAPI noteAPI = NoteAPI.provide();
 
-        throw new UnsupportedOperationException("Not implemented yet");
+        String content = noteAPI.getNote(title);
+        Note initialNote = new Note(title, content);
+        remoteNote.postValue(initialNote);
+
+        TimeService timeService = TimeService.singleton();
+        timeService.registerTimeListener();
+        timeService.getTimeData().observeForever(time -> {
+            if (time % 3000 == 0) {
+                String latestContent = noteAPI.getNote(title);
+                Note newNote = new Note(title, latestContent);
+                remoteNote.postValue(newNote);
+            }
+        });
+
+        return remoteNote;
     }
 
     public void upsertRemote(Note note) {
-        // TODO: Implement upsertRemote!
-        throw new UnsupportedOperationException("Not implemented yet");
+        try {
+            NoteAPI noteAPI = NoteAPI.provide();
+            String title = note.title;
+            String content = note.content;
+            noteAPI.putNote(title, content);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
