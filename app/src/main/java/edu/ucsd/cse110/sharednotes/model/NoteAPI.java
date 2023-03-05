@@ -27,8 +27,11 @@ public class NoteAPI {
 
     private OkHttpClient client;
 
+    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    private final Gson gson;
     public NoteAPI() {
         this.client = new OkHttpClient();
+        this.gson = new Gson();
     }
 
     public static NoteAPI provide() {
@@ -68,19 +71,17 @@ public class NoteAPI {
     }
 
     @WorkerThread
-    public String getNote(String title) {
-        String encodedTitle = title.replace(" ", "%20");
-
+    public Note getNote(String title) {
         var request = new Request.Builder()
-                .url("https://sharednotes.goto.ucsd.edu/notes/" + encodedTitle)
+                .url("https://sharednotes.goto.ucsd.edu/notes/" + title)
                 .method("GET", null)
                 .build();
 
         try (var response = client.newCall(request).execute()) {
             assert response.body() != null;
-            var content = response.body().string();
-            Log.i("GET NOTE", content);
-            return content;
+            var body = response.body().string();
+            Log.i("GET NOTE", body);
+            return gson.fromJson(body, Note.class);
         } catch (Exception e) {
             e.printStackTrace();
             return null;
@@ -88,13 +89,16 @@ public class NoteAPI {
     }
 
     @WorkerThread
-    public void putNote(String title, String content) {
-        // URLs cannot contain spaces, so we replace them with %20.
-        String encodedTitle = title.replace(" ", "%20");
+    public void putNote(Note note) {
+        var json = gson.toJson(note);
 
+        var body = RequestBody.create(json, JSON);
+        // URLs cannot contain spaces, so we replace them with %20.
+        String encodedTitle = note.title.replace(" ", "%20");
         var request = new Request.Builder()
+                .header("Content-Type", "application/json")
                 .url("https://sharednotes.goto.ucsd.edu/notes/" + encodedTitle)
-                .method("PUT", RequestBody.create(content, MediaType.parse("text/plain")))
+                .method("PUT", body)
                 .build();
 
         try (var response = client.newCall(request).execute()) {
@@ -110,18 +114,6 @@ public class NoteAPI {
         var future = executor.submit(() -> echo(msg));
 
         // We can use future.get(1, SECONDS) to wait for the result.
-        return future;
-    }
-
-    public Future<String> getAsync(String title) {
-        var executor = Executors.newSingleThreadExecutor();
-        var future = executor.submit(() -> getNote(title));
-        return future;
-    }
-
-    public Future<?> putAsync(String title, String content) {
-        var executor = Executors.newSingleThreadExecutor();
-        var future = executor.submit(() -> putNote(title, content));
         return future;
     }
 }

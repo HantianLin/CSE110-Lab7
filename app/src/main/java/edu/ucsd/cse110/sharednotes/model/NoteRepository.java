@@ -17,12 +17,12 @@ import java.util.concurrent.ScheduledFuture;
 
 public class NoteRepository {
     private final NoteDao dao;
+    private final NoteAPI api;
     private ScheduledFuture<?> poller; // what could this be for... hmm?
-    private MutableLiveData<Note> remoteNote;
 
     public NoteRepository(NoteDao dao) {
         this.dao = dao;
-        remoteNote = new MutableLiveData<>();
+        this.api = NoteAPI.provide();
     }
 
     // Synced Methods
@@ -105,33 +105,27 @@ public class NoteRepository {
         // You may (but don't have to) want to cache the LiveData's for each title, so that
         // you don't create a new polling thread every time you call getRemote with the same title.
         // You don't need to worry about killing background threads.
-        NoteAPI noteAPI = NoteAPI.provide();
+        MutableLiveData<Note> noteLiveData = new MutableLiveData<>();
 
-        String content = noteAPI.getNote(title);
-        Note initialNote = new Note(title, content);
-        remoteNote.postValue(initialNote);
+        Note note = api.getNote(title);
+        if (note != null) {
+            upsertLocal(note);
+            noteLiveData.setValue(note);
+        }
 
-        TimeService timeService = TimeService.singleton();
-        timeService.registerTimeListener();
-        timeService.getTimeData().observeForever(time -> {
-            if (time % 3000 == 0) {
-                String latestContent = noteAPI.getNote(title);
-                Note newNote = new Note(title, latestContent);
-                remoteNote.postValue(newNote);
+        ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
+        executorService.scheduleAtFixedRate(() -> {
+            Note updateNote = api.getNote(title);
+            if (updateNote != null) {
+                upsertLocal(updateNote);
+                noteLiveData.postValue(updateNote);
             }
-        });
+        }, 0, 0, TimeUnit.SECONDS);
 
-        return remoteNote;
+        return noteLiveData;
     }
 
     public void upsertRemote(Note note) {
-        try {
-            NoteAPI noteAPI = NoteAPI.provide();
-            String title = note.title;
-            String content = note.content;
-            noteAPI.putNote(title, content);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        api.putNote(note);
     }
 }
